@@ -1,0 +1,13 @@
+{
+  "domain": "solaredge_ha_web_client",
+  "name": "SolarEdge Web Client",
+  "codeowners": ["@pmichael"],
+  "config_flow": true,
+  "documentation": "https://github.com/pmichael/solaredge-ha-web-client",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/pmichael/solaredge-ha-web-client/issues",
+  "loggers": ["solaredge_web"],
+  "requirements": ["solaredge-web==0.4.0"],
+  "version": "0.1.0"
+}

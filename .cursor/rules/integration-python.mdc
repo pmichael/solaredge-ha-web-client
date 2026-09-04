@@ -1,0 +1,26 @@
+---
+description: Python patterns for the Home Assistant integration package
+globs: custom_components/solaredge_ha_web_client/**/*.py
+alwaysApply: false
+---
+
+# Integration Python
+
+```python
+# ❌ BAD — swallows library errors and hides which endpoint failed
+try:
+    await client.async_get_equipment()
+except Exception:
+    return None
+
+# ✅ GOOD — map the status, log the endpoint, keep other sections
+except ClientResponseError as err:
+    LOGGER.warning("async_get_equipment failed: HTTP %s", err.status)
+    raise
+```
+
+- Async for all I/O. Use HA's `async_get_clientsession(hass)`; do not create an aiohttp session.
+- One `DataUpdateCoordinator` per config entry. Statistics import is a gated side effect of that same pass, not a second timer.
+- Partial live-fetch failure must not discard successful sections. Statistics failure must not fail the live cycle.
+- Entities stay available through two failed cycles; unavailable on the third. Expose staleness via "Last successful update".
+- Keep `manifest.json` `requirements` pinned exactly (`solaredge-web==0.4.0` until Core's pin changes).

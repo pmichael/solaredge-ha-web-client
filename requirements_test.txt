@@ -1,0 +1,5 @@
+pytest-homeassistant-custom-component
+pytest-cov
+solaredge-web==0.4.0
+ruff
+mypy

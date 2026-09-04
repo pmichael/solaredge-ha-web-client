@@ -1,0 +1,21 @@
+---
+description: HACS and Home Assistant constraints for this custom integration
+alwaysApply: true
+---
+
+# SolarEdge Web Client
+
+HACS custom integration. Domain is `solaredge_ha_web_client`. One integration per repo, all runtime code under `custom_components/solaredge_ha_web_client/`.
+
+- Read-only. Never write or control SolarEdge.
+- Never commit credentials, site IDs, or serials. Fixtures use `SITE-TEST`, `INV-TEST-1`, `OPT-TEST-1`.
+- Only `coordinator.py` may import `solaredge_web`. Other modules use `models.py` types.
+- No entity may declare `device_class: energy`. Cloud energy is statistics only.
+- Peak power has no device class and no state class (`kWp` is a nameplate).
+- Entities that duplicate Modbus readings end with `(Cloud)`.
+- Statistic IDs are keyed on panel position, never serial.
+- Convert naive timestamps with `siteTimeZone`, not HA's default timezone.
+- Do not catch `ValueError` from `solaredge-web`. That is a caller bug.
+- Reauth only on definitive 401/403. Transient session expiry is a retry.
+
+Official layout: [HACS integration](https://www.hacs.xyz/docs/publish/integration/), [HA file structure](https://developers.home-assistant.io/docs/creating_integration_file_structure/).
