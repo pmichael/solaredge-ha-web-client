@@ -198,10 +198,14 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             raise
         except Exception:
             self._consecutive_failures += 1
+            if self.data_is_stale:
+                self.async_update_listeners()
             raise
 
         if not live.any_ok:
             self._consecutive_failures += 1
+            if self.data_is_stale:
+                self.async_update_listeners()
             raise UpdateFailed(
                 f"No SolarEdge endpoint answered for site {self.site_id} "
                 f"({self._consecutive_failures} consecutive failures)"
