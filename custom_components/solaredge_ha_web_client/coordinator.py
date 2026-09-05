@@ -189,6 +189,9 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             # Reauth is not an outage; the user must act, and the counter
             # would otherwise be meaningless while the flow is pending.
             raise
+        except ValueError:
+            # Library ValueError is a caller bug, not a SolarEdge outage.
+            raise
         except Exception:
             self._consecutive_failures += 1
             raise

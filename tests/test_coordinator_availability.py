@@ -76,3 +76,16 @@ async def test_partial_success_counts_as_success(hass: HomeAssistant) -> None:
     await coordinator.async_refresh()
 
     assert coordinator.consecutive_failures == 0
+
+
+async def test_value_error_is_not_an_outage(hass: HomeAssistant) -> None:
+    """A library ValueError is a caller bug, not a SolarEdge hiccup."""
+    client = _client(
+        async_get_optimizer_data=AsyncMock(side_effect=ValueError("bad resolution"))
+    )
+    coordinator = await _coordinator(hass, client)
+
+    await coordinator.async_refresh()
+
+    assert coordinator.consecutive_failures == 0
+    assert coordinator.data_is_stale is False
