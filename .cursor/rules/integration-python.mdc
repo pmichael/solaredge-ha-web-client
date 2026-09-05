@@ -23,4 +23,4 @@ except ClientResponseError as err:
 - One `DataUpdateCoordinator` per config entry. Statistics import is a gated side effect of that same pass, not a second timer.
 - Partial live-fetch failure must not discard successful sections. Statistics failure must not fail the live cycle.
 - Entities stay available through two failed cycles; unavailable on the third. Expose staleness via "Last successful update".
-- Keep `manifest.json` `requirements` pinned exactly (`solaredge-web==0.4.0` until Core's pin changes).
+- Keep `manifest.json` `requirements` pinned exactly (`solaredge-web==0.5.0`).

@@ -1,5 +1,13 @@
-"""Shared fixtures.
+"""Shared fixtures."""
 
-The pytest-homeassistant-custom-component `enable_custom_integrations` fixture
-is added when coordinator/config-flow tests need a hass instance.
-"""
+from collections.abc import Generator
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(
+    enable_custom_integrations: None,
+) -> Generator[None]:
+    """Enable custom integrations for hass tests."""
+    yield
