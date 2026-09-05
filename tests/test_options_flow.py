@@ -36,9 +36,7 @@ async def test_options_flow_stores_the_interval(hass: HomeAssistant) -> None:
     "value",
     [MIN_LIVE_INTERVAL_MINUTES - 1, MAX_LIVE_INTERVAL_MINUTES + 1],
 )
-async def test_options_flow_rejects_out_of_range(
-    hass: HomeAssistant, value: int
-) -> None:
+async def test_options_flow_rejects_out_of_range(hass: HomeAssistant, value: int) -> None:
     """Below the floor the API has nothing new to give."""
     entry = MockConfigEntry(domain=DOMAIN, unique_id=SITE_ID, data=ENTRY_DATA)
     entry.add_to_hass(hass)

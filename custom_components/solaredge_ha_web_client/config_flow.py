@@ -58,7 +58,7 @@ class SolarEdgeWebConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors)
 
-    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+    async def async_step_reauth(self, _entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """Start reauth. Only the password is in question."""
         return await self.async_step_reauth_confirm()
 
@@ -90,7 +90,7 @@ class SolarEdgeWebConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> SolarEdgeWebOptionsFlow:
+    def async_get_options_flow(_config_entry: ConfigEntry) -> SolarEdgeWebOptionsFlow:
         """Return the options flow."""
         return SolarEdgeWebOptionsFlow()
 
@@ -98,16 +98,12 @@ class SolarEdgeWebConfigFlow(ConfigFlow, domain=DOMAIN):
 class SolarEdgeWebOptionsFlow(OptionsFlow):
     """Adjust how often live data is polled."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the options step."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(
-            CONF_LIVE_INTERVAL, DEFAULT_LIVE_INTERVAL_MINUTES
-        )
+        current = self.config_entry.options.get(CONF_LIVE_INTERVAL, DEFAULT_LIVE_INTERVAL_MINUTES)
         schema = vol.Schema(
             {
                 vol.Optional(CONF_LIVE_INTERVAL, default=current): vol.All(
