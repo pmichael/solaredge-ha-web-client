@@ -6,7 +6,8 @@ from datetime import datetime, tzinfo
 from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util, slugify
+from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .const import DOMAIN, LOGGER
 
@@ -27,7 +28,8 @@ def statistic_id_for(site_id: str, kind: str, display_name: str) -> str:
 
 
 async def resolve_site_timezone(
-    hass: HomeAssistant, snapshot: SiteSnapshot
+    hass: HomeAssistant,  # noqa: ARG001 — HA timezone helper; zone is the site's
+    snapshot: SiteSnapshot,
 ) -> tzinfo:
     """Resolve the site's IANA timezone name to a tzinfo.
 

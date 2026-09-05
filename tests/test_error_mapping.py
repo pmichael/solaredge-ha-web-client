@@ -1,11 +1,9 @@
 """Exception mapping. Type, never message text."""
 
-import asyncio
 from unittest.mock import Mock
 
 import aiohttp
 import pytest
-
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -54,7 +52,7 @@ def test_connection_error_is_retryable() -> None:
 
 
 def test_timeout_is_retryable() -> None:
-    result = map_client_error(asyncio.TimeoutError(), "optimizer data")
+    result = map_client_error(TimeoutError(), "optimizer data")
     assert isinstance(result, UpdateFailed)
 
 

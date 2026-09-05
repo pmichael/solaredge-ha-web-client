@@ -8,17 +8,17 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import aiohttp
-from solaredge_web import InverterData, LivePower, OptimizerData, SolarEdgeWeb
-
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from solaredge_web import SolarEdgeWeb
 
 from .const import (
     CONF_LIVE_INTERVAL,
@@ -30,10 +30,7 @@ from .const import (
 )
 from .models import LiveData, SiteSnapshot, build_site_snapshot
 
-if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-
-    type SolarEdgeWebConfigEntry = ConfigEntry[SolarEdgeWebCoordinator]
+type SolarEdgeWebConfigEntry = ConfigEntry[SolarEdgeWebCoordinator]
 
 
 class SkipFetch(Exception):  # noqa: N818
@@ -80,6 +77,34 @@ def map_client_error(err: Exception, endpoint: str) -> Exception:
     return UpdateFailed(f"Unexpected error fetching {endpoint}: {err}")
 
 
+async def async_validate_login(
+    hass: HomeAssistant,
+    username: str,
+    password: str,
+    site_id: str,
+) -> str | None:
+    """Return a flow error key, or None when the credentials work.
+
+    `async_get_site_information` both authenticates and proves the site is
+    visible to this account, so one request validates the whole form.
+    """
+    client = SolarEdgeWeb(
+        username=username,
+        password=password,
+        site_id=site_id,
+        session=async_get_clientsession(hass),
+    )
+    try:
+        await client.async_get_site_information()
+    except Exception as err:  # noqa: BLE001
+        mapped = map_client_error(err, "site information")
+        if isinstance(mapped, ConfigEntryAuthFailed):
+            return "invalid_auth"
+        LOGGER.debug("Validation failed: %s", mapped)
+        return "cannot_connect"
+    return None
+
+
 class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
     """Polls live data and, twice a day, imports energy history.
 
@@ -96,9 +121,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         config_entry: SolarEdgeWebConfigEntry,
     ) -> None:
         """Initialise the coordinator and its single client."""
-        interval = config_entry.options.get(
-            CONF_LIVE_INTERVAL, DEFAULT_LIVE_INTERVAL_MINUTES
-        )
+        interval = config_entry.options.get(CONF_LIVE_INTERVAL, DEFAULT_LIVE_INTERVAL_MINUTES)
         super().__init__(
             hass,
             LOGGER,
@@ -136,7 +159,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             site_information = await self.client.async_get_site_information()
             await asyncio.sleep(REQUEST_SPACING_SECONDS)
             site_components = await self.client.async_get_site_components()
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             raise map_client_error(err, "site layout") from err
 
         self._snapshot = build_site_snapshot(
@@ -150,9 +173,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         """Run one live cycle, tolerating partial failure."""
         live = await self._async_fetch_live()
         if not live.any_ok:
-            raise UpdateFailed(
-                f"No SolarEdge endpoint answered for site {self.site_id}"
-            )
+            raise UpdateFailed(f"No SolarEdge endpoint answered for site {self.site_id}")
         return live
 
     async def _async_fetch_live(self) -> LiveData:
@@ -176,7 +197,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
                 flags[key] = True
             except ConfigEntryAuthFailed:
                 raise
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 mapped = map_client_error(err, endpoint)
                 if isinstance(mapped, ConfigEntryAuthFailed):
                     raise mapped from err

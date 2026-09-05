@@ -4,17 +4,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
 import pytest
-from solaredge_web import LivePower, OptimizerData
-
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from solaredge_web import LivePower, OptimizerData
 
 from custom_components.solaredge_ha_web_client.const import CONF_SITE_ID, DOMAIN
 from custom_components.solaredge_ha_web_client.coordinator import (
     SolarEdgeWebCoordinator,
 )
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .fixtures import SITE_COMPONENTS, SITE_ID, SITE_INFORMATION, equipment_dict
 
@@ -41,9 +40,7 @@ def _client(**overrides: object) -> Mock:
     client.async_get_optimizer_data = AsyncMock(
         return_value={"OPT-TEST-1": OptimizerData(serial="OPT-TEST-1", power=198.0)}
     )
-    client.async_get_optimizer_temperatures = AsyncMock(
-        return_value={"OPT-TEST-1": 41.5}
-    )
+    client.async_get_optimizer_temperatures = AsyncMock(return_value={"OPT-TEST-1": 41.5})
     client.async_get_inverter_data = AsyncMock(return_value={})
     client.async_get_live_power = AsyncMock(
         return_value=LivePower(
@@ -53,9 +50,7 @@ def _client(**overrides: object) -> Mock:
             last_update_time=None,
         )
     )
-    client.async_get_alerts = AsyncMock(
-        return_value={"totalAlertsCount": 0, "topAlerts": []}
-    )
+    client.async_get_alerts = AsyncMock(return_value={"totalAlertsCount": 0, "topAlerts": []})
     for name, value in overrides.items():
         setattr(client, name, value)
     return client
@@ -93,9 +88,7 @@ async def test_one_failed_endpoint_does_not_discard_the_others(
 ) -> None:
     """A temperature outage must not blank out working power sensors."""
     client = _client(
-        async_get_optimizer_temperatures=AsyncMock(
-            side_effect=aiohttp.ClientError("boom")
-        )
+        async_get_optimizer_temperatures=AsyncMock(side_effect=aiohttp.ClientError("boom"))
     )
     coordinator = await _coordinator(hass, client)
     data = await coordinator._async_update_data()
@@ -148,9 +141,7 @@ async def test_snapshot_is_loaded_once(hass: HomeAssistant) -> None:
 
 async def test_requests_are_spaced(hass: HomeAssistant) -> None:
     """Politeness on an API with no published limits and no support channel."""
-    with patch(
-        "custom_components.solaredge_ha_web_client.coordinator.asyncio.sleep"
-    ) as sleep:
+    with patch("custom_components.solaredge_ha_web_client.coordinator.asyncio.sleep") as sleep:
         coordinator = await _coordinator(hass, _client())
         await coordinator._async_update_data()
     assert sleep.await_count >= 4

@@ -63,11 +63,7 @@ def equipment_dict(*, include_inactive: bool = False) -> dict[str, dict[str, Any
     walk(EQUIPMENT_TREE)
     if include_inactive:
         return result
-    return {
-        k: v
-        for k, v in result.items()
-        if v.get("properties", {}).get("status") != "INACTIVE"
-    }
+    return {k: v for k, v in result.items() if v.get("properties", {}).get("status") != "INACTIVE"}
 
 
 SITE_INFORMATION: dict[str, Any] = {

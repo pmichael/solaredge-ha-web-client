@@ -104,7 +104,7 @@ def _as_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -187,11 +187,7 @@ def build_site_snapshot(
 
 def _device_id(node: dict[str, Any]) -> str | None:
     """Extract a layout node's device id, matching async_get_equipment."""
-    return (
-        node.get("serial")
-        or node.get("properties", {}).get("identifier")
-        or node.get("uuid")
-    )
+    return node.get("serial") or node.get("properties", {}).get("identifier") or node.get("uuid")
 
 
 def _short_name(name: Any) -> str:

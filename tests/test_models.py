@@ -112,7 +112,9 @@ def test_tolerates_a_flat_layout_with_no_strings() -> None:
             }
         ],
     }
-    equipment = {"INV-TEST-1": tree["children"][0], "OPT-TEST-9": tree["children"][0]["children"][0]}  # type: ignore[index]
+    inverter = tree["children"][0]
+    optimizer = inverter["children"][0]
+    equipment = {"INV-TEST-1": inverter, "OPT-TEST-9": optimizer}
     snapshot = build_site_snapshot(
         site_id=SITE_ID,
         equipment=equipment,

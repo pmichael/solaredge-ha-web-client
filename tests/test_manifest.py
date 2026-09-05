@@ -6,10 +6,7 @@ from pathlib import Path
 from custom_components.solaredge_ha_web_client.const import DOMAIN
 
 MANIFEST = (
-    Path(__file__).parent.parent
-    / "custom_components"
-    / "solaredge_ha_web_client"
-    / "manifest.json"
+    Path(__file__).parent.parent / "custom_components" / "solaredge_ha_web_client" / "manifest.json"
 )
 
 
