@@ -36,6 +36,14 @@ def test_manifest_declares_required_keys() -> None:
     assert manifest["iot_class"] == "cloud_polling"
 
 
+def test_manifest_declares_recorder_after_dependency() -> None:
+    """Hassfest rejects recorder imports unless the manifest lists it."""
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    after = manifest.get("after_dependencies", [])
+    depends = manifest.get("dependencies", [])
+    assert "recorder" in after or "recorder" in depends
+
+
 def test_manifest_pins_solaredge_web_exactly() -> None:
     """An unpinned requirement lets an upstream break arrive unannounced."""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
