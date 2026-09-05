@@ -1,6 +1,6 @@
 """Cumulative sums. The highest-risk logic in the integration."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -11,6 +11,7 @@ from solaredge_web import EnergyData
 
 from custom_components.solaredge_ha_web_client.models import build_site_snapshot
 from custom_components.solaredge_ha_web_client.statistics import (
+    _async_get_baselines,
     async_import_energy,
     statistic_id_for,
 )
@@ -152,3 +153,62 @@ async def test_every_series_is_written(recorder_mock: Recorder, hass: HomeAssist
 
     assert written == 3
     assert add.call_count == 3
+
+
+_WINDOW_START = datetime(2026, 9, 4, 8, 0, tzinfo=UTC)
+_STATS = "custom_components.solaredge_ha_web_client.statistics"
+
+
+async def test_baseline_uses_the_hour_before_the_window(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A normal overlapping import continues from the preceding hour."""
+    key = statistic_id_for(SITE_ID, "opt", "1.1.1")
+    with (
+        patch(
+            f"{_STATS}.statistics_during_period",
+            return_value={key: [{"sum": 5000.0}]},
+        ) as during,
+        patch(f"{_STATS}.get_last_statistics") as last,
+    ):
+        baselines = await _async_get_baselines(hass, {key}, _WINDOW_START)
+
+    assert baselines[key] == 5000.0
+    last.assert_not_called()
+    before = _WINDOW_START - timedelta(hours=1)
+    assert during.call_args.args[1:3] == (before, before + timedelta(seconds=1))
+
+
+async def test_baseline_falls_back_when_offline_longer_than_the_window(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A gap longer than the fetch must not restart the lifetime total."""
+    key = statistic_id_for(SITE_ID, "opt", "1.1.1")
+    last_start = _WINDOW_START.timestamp() - timedelta(days=2).total_seconds()
+    with (
+        patch(f"{_STATS}.statistics_during_period", return_value={}),
+        patch(
+            f"{_STATS}.get_last_statistics",
+            return_value={key: [{"start": last_start, "sum": 4000.0}]},
+        ),
+    ):
+        baselines = await _async_get_baselines(hass, {key}, _WINDOW_START)
+
+    assert baselines[key] == 4000.0
+
+
+async def test_baseline_rejects_a_last_stat_inside_the_window(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A row at the window start is this import, not a prior lifetime total."""
+    key = statistic_id_for(SITE_ID, "opt", "1.1.1")
+    with (
+        patch(f"{_STATS}.statistics_during_period", return_value={}),
+        patch(
+            f"{_STATS}.get_last_statistics",
+            return_value={key: [{"start": _WINDOW_START.timestamp(), "sum": 999.0}]},
+        ),
+    ):
+        baselines = await _async_get_baselines(hass, {key}, _WINDOW_START)
+
+    assert baselines[key] == 0.0
