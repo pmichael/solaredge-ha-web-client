@@ -1,6 +1,7 @@
 {
   "domain": "solaredge_ha_web_client",
   "name": "SolarEdge Web Client",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@pmichael"],
   "config_flow": true,
   "documentation": "https://github.com/pmichael/solaredge-ha-web-client",
