@@ -60,16 +60,12 @@ def _async_register_devices(
     )
     inverter_ids: dict[str, str] = {}
     for inverter in snapshot.inverters:
-        device = registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            via_device_id=site.id,
-            **inverter_device_info(snapshot, inverter, coordinator.data),
-        )
+        info = inverter_device_info(snapshot, inverter, coordinator.data)
+        info["via_device_id"] = site.id
+        device = registry.async_get_or_create(config_entry_id=entry.entry_id, **info)
         inverter_ids[inverter.serial] = device.id
     for optimizer in snapshot.optimizers:
-        parent_id = inverter_ids.get(optimizer.inverter_serial)
-        registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            via_device_id=parent_id,
-            **optimizer_device_info(snapshot, optimizer, coordinator.data),
-        )
+        info = optimizer_device_info(snapshot, optimizer, coordinator.data)
+        if parent_id := inverter_ids.get(optimizer.inverter_serial):
+            info["via_device_id"] = parent_id
+        registry.async_get_or_create(config_entry_id=entry.entry_id, **info)

@@ -8,6 +8,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .coordinator import SolarEdgeWebCoordinator
 
 if TYPE_CHECKING:
     from .models import InverterInfo, LiveData, OptimizerInfo, SiteSnapshot
@@ -70,7 +71,7 @@ def optimizer_device_info(
     )
 
 
-class SolarEdgeWebEntity(CoordinatorEntity["SolarEdgeWebCoordinator"]):
+class SolarEdgeWebEntity(CoordinatorEntity[SolarEdgeWebCoordinator]):
     """Base for every entity in this integration."""
 
     _attr_has_entity_name = True
