@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_LIVE_INTERVAL_MINUTES,
     DOMAIN,
     LOGGER,
+    MAX_CONSECUTIVE_FAILURES,
     REQUEST_SPACING_SECONDS,
 )
 from .models import LiveData, SiteSnapshot, build_site_snapshot
@@ -137,6 +138,17 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             session=async_get_clientsession(hass),
         )
         self._snapshot: SiteSnapshot | None = None
+        self._consecutive_failures = 0
+
+    @property
+    def consecutive_failures(self) -> int:
+        """How many cycles in a row have failed outright."""
+        return self._consecutive_failures
+
+    @property
+    def data_is_stale(self) -> bool:
+        """True once failures have run long enough to stop trusting the data."""
+        return self._consecutive_failures >= MAX_CONSECUTIVE_FAILURES
 
     @property
     def snapshot(self) -> SiteSnapshot:
@@ -171,9 +183,24 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
 
     async def _async_update_data(self) -> LiveData:
         """Run one live cycle, tolerating partial failure."""
-        live = await self._async_fetch_live()
+        try:
+            live = await self._async_fetch_live()
+        except ConfigEntryAuthFailed:
+            # Reauth is not an outage; the user must act, and the counter
+            # would otherwise be meaningless while the flow is pending.
+            raise
+        except Exception:
+            self._consecutive_failures += 1
+            raise
+
         if not live.any_ok:
-            raise UpdateFailed(f"No SolarEdge endpoint answered for site {self.site_id}")
+            self._consecutive_failures += 1
+            raise UpdateFailed(
+                f"No SolarEdge endpoint answered for site {self.site_id} "
+                f"({self._consecutive_failures} consecutive failures)"
+            )
+
+        self._consecutive_failures = 0
         return live
 
     async def _async_fetch_live(self) -> LiveData:
