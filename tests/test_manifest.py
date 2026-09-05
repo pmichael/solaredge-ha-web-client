@@ -43,5 +43,6 @@ def test_manifest_pins_solaredge_web_exactly() -> None:
     """An unpinned requirement lets an upstream break arrive unannounced."""
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     requirements = manifest["requirements"]
-    assert len(requirements) == 1
-    assert requirements[0].startswith("solaredge-web==")
+    assert requirements == ["solaredge-web==0.5.0"]
+    req_file = MANIFEST.parents[2] / "requirements_test.txt"
+    assert "solaredge-web==0.5.0" in req_file.read_text(encoding="utf-8")

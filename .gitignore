@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-linux/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
@@ -9,3 +10,4 @@ htmlcov/
 .env
 .env.*
 *.egg-info/
+.worktrees/
