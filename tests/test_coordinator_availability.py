@@ -1,6 +1,6 @@
 """Availability hysteresis."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock
 
 import aiohttp
 from homeassistant.core import HomeAssistant
