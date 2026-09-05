@@ -66,9 +66,7 @@ async def test_success_resets_the_counter(hass: HomeAssistant) -> None:
 async def test_partial_success_counts_as_success(hass: HomeAssistant) -> None:
     """Some data is not an outage."""
     client = _client(
-        async_get_optimizer_temperatures=AsyncMock(
-            side_effect=aiohttp.ClientError("boom")
-        )
+        async_get_optimizer_temperatures=AsyncMock(side_effect=aiohttp.ClientError("boom"))
     )
     coordinator = await _coordinator(hass, client)
     coordinator._consecutive_failures = 2
@@ -80,9 +78,7 @@ async def test_partial_success_counts_as_success(hass: HomeAssistant) -> None:
 
 async def test_value_error_is_not_an_outage(hass: HomeAssistant) -> None:
     """A library ValueError is a caller bug, not a SolarEdge hiccup."""
-    client = _client(
-        async_get_optimizer_data=AsyncMock(side_effect=ValueError("bad resolution"))
-    )
+    client = _client(async_get_optimizer_data=AsyncMock(side_effect=ValueError("bad resolution")))
     coordinator = await _coordinator(hass, client)
 
     await coordinator.async_refresh()
