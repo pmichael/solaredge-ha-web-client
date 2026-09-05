@@ -37,5 +37,45 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "max_temperature_today": {
+        "name": "Max temperature today"
+      },
+      "module_voltage": {
+        "name": "Module voltage"
+      },
+      "optimizer_voltage": {
+        "name": "Optimizer voltage"
+      },
+      "current": {
+        "name": "Current"
+      },
+      "last_measurement": {
+        "name": "Last measurement"
+      },
+      "ac_power_cloud": {
+        "name": "AC power (Cloud)"
+      },
+      "status_cloud": {
+        "name": "Status (Cloud)"
+      },
+      "site_power_cloud": {
+        "name": "Site power (Cloud)"
+      },
+      "peak_power": {
+        "name": "Peak power"
+      },
+      "last_successful_update": {
+        "name": "Last successful update"
+      },
+      "alert_count": {
+        "name": "Open alerts"
+      }
+    }
   }
 }
