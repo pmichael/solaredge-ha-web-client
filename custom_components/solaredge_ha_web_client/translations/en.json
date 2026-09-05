@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SolarEdge portal credentials",
+        "description": "Sign in with the same username and password you use at monitoring.solaredge.com. Your site ID appears in the portal URL.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "site_id": "Site ID"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter your SolarEdge password",
+        "description": "SolarEdge rejected the stored password for {site_id}.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "SolarEdge rejected those credentials.",
+      "cannot_connect": "Could not reach SolarEdge. Check your connection and try again."
+    },
+    "abort": {
+      "already_configured": "That site is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling options",
+        "description": "Optimizers report roughly every 15 minutes, so polling faster than 5 minutes adds load without adding data.",
+        "data": {
+          "live_interval_minutes": "Minutes between polls"
+        }
+      }
+    }
+  }
+}
