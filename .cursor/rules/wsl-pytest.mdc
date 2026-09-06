@@ -1,0 +1,20 @@
+---
+description: Hass tests and mypy/ruff for this repo run in WSL, not Windows Python
+alwaysApply: true
+---
+
+# Test environment (Windows host)
+
+Run pytest, ruff, and mypy with WSL Ubuntu-26.04 and the project venv:
+
+```
+wsl -d Ubuntu-26.04 -- bash -lc "cd /mnt/c/Projects/solaredge-ha-web-client && /home/misha/.venv-solaredge-ha/bin/python -m pytest <args>"
+```
+
+Same interpreter for `ruff` and `mypy`. In a git worktree, `cd` that worktree under `/mnt/c/Projects/solaredge-ha-web-client/.worktrees/…`.
+
+Hass tests need `fcntl` / `resource`, which the Windows host Python does not provide. Host `python` / `py` / `C:\Program Files\Python*` also has no project pytest.
+
+Do not run `python -m pytest`, `py -m pytest`, or `python -m mypy` on the Windows host.
+
+If a review prompt says not to re-run the suite, skip pytest entirely — including “focused” or “just this file” runs. The implementer report is the test evidence.
