@@ -128,6 +128,27 @@ async def test_soft_statistics_failure_does_not_refetch_every_cycle(
     assert energy.await_count == 1
 
 
+async def test_recorder_due_check_failure_does_not_start_backoff(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A failed freshness check is not an energy attempt; retry next cycle."""
+    energy = AsyncMock(return_value=[])
+    client = _client(async_get_energy_data=energy)
+    coordinator = await _coordinator(hass, client)
+
+    with patch(
+        "custom_components.solaredge_ha_web_client.coordinator._async_newest_statistic_time",
+        new=AsyncMock(side_effect=[RuntimeError("recorder down"), None]),
+    ):
+        first = await coordinator._async_update_data()
+        second = await coordinator._async_update_data()
+
+    assert first.optimizers["OPT-TEST-1"].power == 198.0
+    assert second.optimizers["OPT-TEST-1"].power == 198.0
+    assert coordinator.consecutive_failures == 0
+    assert energy.await_count == 1
+
+
 async def test_statistics_failure_does_not_trigger_reauth_alone(
     recorder_mock: Recorder, hass: HomeAssistant
 ) -> None:
