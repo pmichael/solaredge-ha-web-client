@@ -6,16 +6,18 @@ The only module permitted to import from `solaredge_web`.
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
 import aiohttp
+from homeassistant.components.recorder.statistics import get_last_statistics
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from solaredge_web import SolarEdgeWeb
@@ -28,8 +30,10 @@ from .const import (
     LOGGER,
     MAX_CONSECUTIVE_FAILURES,
     REQUEST_SPACING_SECONDS,
+    STATISTICS_INTERVAL,
 )
 from .models import LiveData, SiteSnapshot, build_site_snapshot
+from .statistics import async_import_energy, statistic_id_for
 
 type SolarEdgeWebConfigEntry = ConfigEntry[SolarEdgeWebCoordinator]
 
@@ -194,16 +198,21 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             raise
         except Exception:
             self._consecutive_failures += 1
+            if self.data_is_stale:
+                self.async_update_listeners()
             raise
 
         if not live.any_ok:
             self._consecutive_failures += 1
+            if self.data_is_stale:
+                self.async_update_listeners()
             raise UpdateFailed(
                 f"No SolarEdge endpoint answered for site {self.site_id} "
                 f"({self._consecutive_failures} consecutive failures)"
             )
 
         self._consecutive_failures = 0
+        await self._async_maybe_import_statistics()
         return live
 
     async def _async_fetch_live(self) -> LiveData:
@@ -249,3 +258,71 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             live_power_ok=flags.get("live_power", False),
             alerts_ok=flags.get("alerts", False),
         )
+
+    async def _async_maybe_import_statistics(self) -> None:
+        """Import energy history if the interval has elapsed.
+
+        Wrapped in its own error boundary: live data is this cycle's product
+        and statistics are a side effect, so a failed history import must not
+        take the live sensors down with it. A credential rejection is the one
+        exception — that is not specific to statistics and the user has to act.
+        """
+        try:
+            if not await self._async_statistics_are_due():
+                return
+
+            LOGGER.debug("Importing energy statistics for site %s", self.site_id)
+            energy_data = await self.client.async_get_energy_data()
+            await async_import_energy(
+                self.hass,
+                self.snapshot,
+                self.config_entry.title,
+                energy_data,
+            )
+        except ConfigEntryAuthFailed:
+            raise
+        except ValueError:
+            # Library ValueError is a caller bug, not a soft statistics failure.
+            raise
+        except Exception as err:
+            mapped = map_client_error(err, "energy data")
+            if isinstance(mapped, ConfigEntryAuthFailed):
+                raise mapped from err
+            LOGGER.warning("Energy statistics import failed: %s", mapped)
+
+    async def _async_statistics_are_due(self) -> bool:
+        """Whether enough time has passed since the newest stored statistic.
+
+        Elapsed time from the recorder rather than a cycle counter: the
+        recorder already knows when we last wrote, so no state needs
+        persisting, and the gate stays correct across restarts and at any poll
+        interval.
+        """
+        reference = (
+            statistic_id_for(self.site_id, "opt", self.snapshot.optimizers[0].display_name)
+            if self.snapshot.optimizers
+            else None
+        )
+        if reference is None:
+            return False
+
+        newest = await _async_newest_statistic_time(self.hass, reference)
+        if newest is None:
+            return True
+        return dt_util.utcnow() - newest >= STATISTICS_INTERVAL
+
+
+async def _async_newest_statistic_time(hass: HomeAssistant, statistic_id: str) -> datetime | None:
+    """Return when the newest stored statistic for this ID starts."""
+    rows = await get_instance(hass).async_add_executor_job(
+        get_last_statistics,
+        hass,
+        1,
+        statistic_id,
+        True,  # noqa: FBT003 — convert_units is positional on HA's helper
+        {"sum"},
+    )
+    entries = rows.get(statistic_id) if rows else None
+    if not entries:
+        return None
+    return dt_util.utc_from_timestamp(entries[0]["start"])
