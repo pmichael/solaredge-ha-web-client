@@ -109,9 +109,6 @@ async def test_sustained_failure_marks_entities_unavailable(
 
     for _ in range(MAX_CONSECUTIVE_FAILURES):
         await coordinator.async_refresh()
-    # Repeated UpdateFailed leaves last_update_success False, so HA skips
-    # listener updates. Staleness flips on the last cycle; push that out.
-    coordinator.async_update_listeners()
     await hass.async_block_till_done()
 
     assert hass.states.get("sensor.optimizer_1_1_1_power").state == STATE_UNAVAILABLE
