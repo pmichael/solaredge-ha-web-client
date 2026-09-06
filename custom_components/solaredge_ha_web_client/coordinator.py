@@ -290,6 +290,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             mapped = map_client_error(err, "energy data")
             if isinstance(mapped, ConfigEntryAuthFailed):
                 raise mapped from err
+            self._last_statistics_attempt = dt_util.utcnow()
             LOGGER.warning("Energy statistics import failed: %s", mapped)
 
     async def _async_statistics_are_due(self) -> bool:
