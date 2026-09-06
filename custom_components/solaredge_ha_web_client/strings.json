@@ -76,6 +76,14 @@
       "alert_count": {
         "name": "Open alerts"
       }
+    },
+    "binary_sensor": {
+      "alerts": {
+        "name": "Alerts"
+      },
+      "running": {
+        "name": "Running"
+      }
     }
   }
 }

@@ -61,7 +61,7 @@ async def test_peak_power_has_no_device_or_state_class(
 ) -> None:
     """A kWp nameplate rating must not use a power device class."""
     await _setup(hass, _client())
-    state = hass.states.get("sensor.solaredge_site_site_test_peak_power")
+    state = hass.states.get("sensor.solaredge_site_peak_power")
     assert state is not None
     assert state.state == "11.7"
     assert "device_class" not in state.attributes
@@ -71,7 +71,7 @@ async def test_peak_power_has_no_device_or_state_class(
 async def test_cloud_sensors_are_labelled_cloud(hass: HomeAssistant) -> None:
     """Without the qualifier these sit next to Modbus entities, disagreeing."""
     await _setup(hass, _client())
-    state = hass.states.get("sensor.solaredge_site_site_test_site_power_cloud")
+    state = hass.states.get("sensor.solaredge_site_site_power_cloud")
     assert state is not None
     assert "Cloud" in state.attributes["friendly_name"]
 
@@ -79,7 +79,7 @@ async def test_cloud_sensors_are_labelled_cloud(hass: HomeAssistant) -> None:
 async def test_last_successful_update_is_present(hass: HomeAssistant) -> None:
     """Availability holds stale values, so staleness must be observable."""
     await _setup(hass, _client())
-    state = hass.states.get("sensor.solaredge_site_site_test_last_successful_update")
+    state = hass.states.get("sensor.solaredge_site_last_successful_update")
     assert state is not None
     assert state.state != STATE_UNKNOWN
 
@@ -133,8 +133,8 @@ async def test_nameplate_stays_available_after_sustained_failure(
         await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    peak = hass.states.get("sensor.solaredge_site_site_test_peak_power")
-    last_ok = hass.states.get("sensor.solaredge_site_site_test_last_successful_update")
+    peak = hass.states.get("sensor.solaredge_site_peak_power")
+    last_ok = hass.states.get("sensor.solaredge_site_last_successful_update")
     assert peak is not None
     assert last_ok is not None
     assert peak.state == "11.7"
@@ -189,3 +189,32 @@ async def test_unique_ids_are_stable_and_distinct(hass: HomeAssistant) -> None:
 
     assert len(unique_ids) == len(set(unique_ids))
     assert "SITE-TEST_OPT-TEST-1_power" in unique_ids
+    assert "SITE-TEST_INV-TEST-1_running" in unique_ids
+
+
+async def test_every_sensor_field_publishes_a_value(hass: HomeAssistant) -> None:
+    """A library rename must fail this test, not sit at unknown forever."""
+    entry = await _setup(hass, _client())
+    registry = er.async_get(hass)
+    for suffix in ("module_voltage", "optimizer_voltage", "current", "last_measurement"):
+        rows = [
+            e
+            for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+            if e.unique_id.endswith(suffix)
+        ]
+        assert rows, f"no entity found for {suffix}"
+        registry.async_update_entity(rows[0].entity_id, disabled_by=None)
+    with patch(
+        "custom_components.solaredge_ha_web_client.coordinator.SolarEdgeWeb",
+        return_value=_client(),
+    ):
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.optimizer_1_1_1_module_voltage").state == "38.5"
+    assert hass.states.get("sensor.optimizer_1_1_1_optimizer_voltage").state == "37.2"
+    assert hass.states.get("sensor.optimizer_1_1_1_current").state == "5.1"
+    assert hass.states.get("sensor.inverter_1_ac_power_cloud").state == "4210.0"
+    last = hass.states.get("sensor.optimizer_1_1_1_last_measurement")
+    assert last is not None
+    assert last.state != STATE_UNKNOWN

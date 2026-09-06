@@ -30,7 +30,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     entities: list[BinarySensorEntity] = [SolarEdgeAlertsBinarySensor(coordinator)]
     entities += [
-        SolarEdgeInverterConnectivity(coordinator, inverter)
+        SolarEdgeInverterRunning(coordinator, inverter)
         for inverter in coordinator.snapshot.inverters
     ]
     async_add_entities(entities)
@@ -40,7 +40,7 @@ class SolarEdgeAlertsBinarySensor(SolarEdgeWebEntity, BinarySensorEntity):
     """Whether the site has open alerts."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_name = "Alerts"
+    _attr_translation_key = "alerts"
 
     def __init__(self, coordinator: SolarEdgeWebCoordinator) -> None:
         """Initialise the sensor."""
@@ -56,39 +56,45 @@ class SolarEdgeAlertsBinarySensor(SolarEdgeWebEntity, BinarySensorEntity):
         answer is unknown is the one wrong answer that matters here.
         """
         live = self.coordinator.data
-        if not live.alerts_ok or live.alert_count is None:
+        if live is None or not live.alerts_ok or live.alert_count is None:
             return None
         return live.alert_count > 0
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose the count alongside the boolean."""
-        return {"alert_count": self.coordinator.data.alert_count}
+        live = self.coordinator.data
+        return {"alert_count": None if live is None else live.alert_count}
 
 
-class SolarEdgeInverterConnectivity(SolarEdgeWebEntity, BinarySensorEntity):
-    """Whether an inverter is reporting as active."""
+class SolarEdgeInverterRunning(SolarEdgeWebEntity, BinarySensorEntity):
+    """Whether an inverter is reporting a producing status."""
 
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_name = "Connectivity"
+    _attr_translation_key = "running"
 
     def __init__(self, coordinator: SolarEdgeWebCoordinator, inverter: InverterInfo) -> None:
         """Initialise the sensor."""
         super().__init__(coordinator)
         self._inverter = inverter
-        self._attr_unique_id = f"{coordinator.snapshot.site_id}_{inverter.serial}_connectivity"
+        self._attr_unique_id = f"{coordinator.snapshot.site_id}_{inverter.serial}_running"
         self._attr_device_info = inverter_device_info(
             coordinator.snapshot, inverter, coordinator.data
         )
 
     @property
     def is_on(self) -> bool | None:
-        """True when the inverter reports an active status."""
+        """True when producing, None when the status is missing or unknown."""
         live = self.coordinator.data
-        if not live.inverters_ok:
+        if live is None or not live.inverters_ok:
             return None
         data = live.inverters.get(self._inverter.serial)
         if data is None or data.status is None:
             return None
-        return data.status.upper() in ACTIVE_STATUSES
+        status = data.status.upper()
+        if status in ACTIVE_STATUSES:
+            return True
+        if status == "DISABLED":
+            return False
+        return None

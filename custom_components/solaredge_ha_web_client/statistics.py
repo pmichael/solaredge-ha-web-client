@@ -23,11 +23,24 @@ from homeassistant.util import slugify
 from homeassistant.util.unit_conversion import EnergyConverter
 
 from .const import DOMAIN, LOGGER
+from .models import SiteSnapshot
 
 if TYPE_CHECKING:
     from solaredge_web import EnergyData
 
-    from .models import SiteSnapshot
+
+def reference_statistic_id(snapshot: SiteSnapshot) -> str | None:
+    """Statistic ID used to decide whether an energy import is due.
+
+    Prefer an optimizer series; inverter-only sites still have history.
+    """
+    if snapshot.optimizers:
+        return statistic_id_for(snapshot.site_id, "opt", snapshot.optimizers[0].display_name)
+    if snapshot.inverters:
+        token = str(snapshot.inverters[0].display_name).rsplit(" ", 1)[-1]
+        return statistic_id_for(snapshot.site_id, "inv", token)
+    LOGGER.debug("No equipment to key energy statistics on; skipping import")
+    return None
 
 
 def statistic_id_for(site_id: str, kind: str, display_name: str) -> str:

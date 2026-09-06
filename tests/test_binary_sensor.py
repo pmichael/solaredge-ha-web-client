@@ -16,7 +16,7 @@ from .test_init import _setup
 
 async def test_no_alerts_is_off(hass: HomeAssistant) -> None:
     await _setup(hass, _client())
-    state = hass.states.get("binary_sensor.solaredge_site_site_test_alerts")
+    state = hass.states.get("binary_sensor.solaredge_site_alerts")
     assert state is not None
     assert state.state == STATE_OFF
     assert state.attributes["device_class"] == BinarySensorDeviceClass.PROBLEM
@@ -32,7 +32,7 @@ async def test_open_alerts_is_on_and_carries_detail(hass: HomeAssistant) -> None
         )
     )
     await _setup(hass, client)
-    state = hass.states.get("binary_sensor.solaredge_site_site_test_alerts")
+    state = hass.states.get("binary_sensor.solaredge_site_alerts")
     assert state.state == STATE_ON
     assert state.attributes["alert_count"] == 2
 
@@ -41,23 +41,24 @@ async def test_failed_alert_fetch_is_unknown_not_off(hass: HomeAssistant) -> Non
     """Reporting 'no problem' when we do not know is the dangerous failure."""
     client = _client(async_get_alerts=AsyncMock(side_effect=aiohttp.ClientError("boom")))
     await _setup(hass, client)
-    state = hass.states.get("binary_sensor.solaredge_site_site_test_alerts")
+    state = hass.states.get("binary_sensor.solaredge_site_alerts")
     assert state.state == STATE_UNKNOWN
 
 
-async def test_inverter_connectivity_follows_status(hass: HomeAssistant) -> None:
+async def test_inverter_running_follows_status(hass: HomeAssistant) -> None:
     client = _client(
         async_get_inverter_data=AsyncMock(
             return_value={"INV-TEST-1": InverterData(serial="INV-TEST-1", status="ACTIVE")}
         )
     )
     await _setup(hass, client)
-    state = hass.states.get("binary_sensor.inverter_1_connectivity")
+    state = hass.states.get("binary_sensor.inverter_1_running")
     assert state is not None
     assert state.state == STATE_ON
+    assert state.attributes["device_class"] == BinarySensorDeviceClass.RUNNING
 
 
-async def test_inverter_connectivity_off_when_not_active(
+async def test_inverter_running_off_when_disabled(
     hass: HomeAssistant,
 ) -> None:
     client = _client(
@@ -66,16 +67,30 @@ async def test_inverter_connectivity_off_when_not_active(
         )
     )
     await _setup(hass, client)
-    state = hass.states.get("binary_sensor.inverter_1_connectivity")
+    state = hass.states.get("binary_sensor.inverter_1_running")
     assert state is not None
     assert state.state == STATE_OFF
+
+
+async def test_inverter_running_unknown_for_unrecognised_status(
+    hass: HomeAssistant,
+) -> None:
+    client = _client(
+        async_get_inverter_data=AsyncMock(
+            return_value={"INV-TEST-1": InverterData(serial="INV-TEST-1", status="SLEEP")}
+        )
+    )
+    await _setup(hass, client)
+    state = hass.states.get("binary_sensor.inverter_1_running")
+    assert state is not None
+    assert state.state == STATE_UNKNOWN
 
 
 async def test_failed_inverter_fetch_is_unknown_not_off(hass: HomeAssistant) -> None:
     """A failed inverter poll must not look like a disconnected inverter."""
     client = _client(async_get_inverter_data=AsyncMock(side_effect=aiohttp.ClientError("boom")))
     await _setup(hass, client)
-    state = hass.states.get("binary_sensor.inverter_1_connectivity")
+    state = hass.states.get("binary_sensor.inverter_1_running")
     assert state is not None
     assert state.state == STATE_UNKNOWN
 
@@ -97,8 +112,8 @@ async def test_sustained_failure_marks_binary_sensors_unavailable(
         await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    alerts = hass.states.get("binary_sensor.solaredge_site_site_test_alerts")
-    connectivity = hass.states.get("binary_sensor.inverter_1_connectivity")
+    alerts = hass.states.get("binary_sensor.solaredge_site_alerts")
+    connectivity = hass.states.get("binary_sensor.inverter_1_running")
     assert alerts is not None
     assert connectivity is not None
     assert alerts.state == STATE_UNAVAILABLE
