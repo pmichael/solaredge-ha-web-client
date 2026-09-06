@@ -73,7 +73,9 @@ OPTIMIZER_SENSORS: tuple[OptimizerSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=lambda live, serial: getattr(live.optimizers.get(serial), "power", None),
+        value_fn=lambda live, serial: (
+            None if (opt := live.optimizers.get(serial)) is None else opt.power
+        ),
         section_ok_fn=lambda live: live.optimizers_ok,
     ),
     OptimizerSensorDescription(
@@ -97,7 +99,9 @@ OPTIMIZER_SENSORS: tuple[OptimizerSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda live, serial: getattr(live.optimizers.get(serial), "voltage", None),
+        value_fn=lambda live, serial: (
+            None if (opt := live.optimizers.get(serial)) is None else opt.voltage
+        ),
         section_ok_fn=lambda live: live.optimizers_ok,
     ),
     OptimizerSensorDescription(
@@ -109,8 +113,8 @@ OPTIMIZER_SENSORS: tuple[OptimizerSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda live, serial: getattr(
-            live.optimizers.get(serial), "optimizer_voltage", None
+        value_fn=lambda live, serial: (
+            None if (opt := live.optimizers.get(serial)) is None else opt.optimizer_voltage
         ),
         section_ok_fn=lambda live: live.optimizers_ok,
     ),
@@ -123,7 +127,9 @@ OPTIMIZER_SENSORS: tuple[OptimizerSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda live, serial: getattr(live.optimizers.get(serial), "current", None),
+        value_fn=lambda live, serial: (
+            None if (opt := live.optimizers.get(serial)) is None else opt.current
+        ),
         section_ok_fn=lambda live: live.optimizers_ok,
     ),
     OptimizerSensorDescription(
@@ -133,8 +139,8 @@ OPTIMIZER_SENSORS: tuple[OptimizerSensorDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda live, serial: getattr(
-            live.optimizers.get(serial), "last_measurement", None
+        value_fn=lambda live, serial: (
+            None if (opt := live.optimizers.get(serial)) is None else opt.last_measurement
         ),
         section_ok_fn=lambda live: live.optimizers_ok,
     ),
@@ -150,7 +156,9 @@ INVERTER_SENSORS: tuple[InverterSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=lambda live, serial: getattr(live.inverters.get(serial), "power", None),
+        value_fn=lambda live, serial: (
+            None if (inv := live.inverters.get(serial)) is None else inv.power
+        ),
         section_ok_fn=lambda live: live.inverters_ok,
     ),
     InverterSensorDescription(
@@ -158,7 +166,9 @@ INVERTER_SENSORS: tuple[InverterSensorDescription, ...] = (
         translation_key="status_cloud",
         name="Status (Cloud)",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda live, serial: getattr(live.inverters.get(serial), "status", None),
+        value_fn=lambda live, serial: (
+            None if (inv := live.inverters.get(serial)) is None else inv.status
+        ),
         section_ok_fn=lambda live: live.inverters_ok,
     ),
 )
@@ -171,7 +181,9 @@ SITE_SENSORS: tuple[SiteSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=lambda live, _snapshot: getattr(live.live_power, "current_power", None),
+        value_fn=lambda live, _snapshot: (
+            None if live.live_power is None else live.live_power.current_power
+        ),
         section_ok_fn=lambda live: live.live_power_ok,
     ),
     SiteSensorDescription(

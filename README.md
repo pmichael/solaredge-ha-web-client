@@ -8,7 +8,7 @@ and nothing to configure before the V1 API retires.
 
 - Power and today's peak temperature for every optimizer
 - Module and optimizer voltage, current and last-measurement time as diagnostics
-- Site alert status and per-inverter connectivity
+- Site alert status and per-inverter running state
 - Per-module, per-string and per-inverter energy history as long-term statistics
 
 ## What it does not provide

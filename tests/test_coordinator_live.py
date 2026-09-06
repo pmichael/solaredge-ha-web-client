@@ -1,5 +1,7 @@
 """Live fetching, including the partial-failure path."""
 
+import logging
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import aiohttp
@@ -8,9 +10,13 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from solaredge_web import LivePower, OptimizerData
+from solaredge_web import InverterData, LivePower, OptimizerData
 
-from custom_components.solaredge_ha_web_client.const import CONF_SITE_ID, DOMAIN
+from custom_components.solaredge_ha_web_client.const import (
+    CONF_SITE_ID,
+    DOMAIN,
+    MAX_CONSECUTIVE_FAILURES,
+)
 from custom_components.solaredge_ha_web_client.coordinator import (
     SolarEdgeWebCoordinator,
 )
@@ -38,10 +44,31 @@ def _client(**overrides: object) -> Mock:
     client.async_get_site_information = AsyncMock(return_value=SITE_INFORMATION)
     client.async_get_site_components = AsyncMock(return_value=SITE_COMPONENTS)
     client.async_get_optimizer_data = AsyncMock(
-        return_value={"OPT-TEST-1": OptimizerData(serial="OPT-TEST-1", power=198.0)}
+        return_value={
+            "OPT-TEST-1": OptimizerData(
+                serial="OPT-TEST-1",
+                power=198.0,
+                voltage=38.5,
+                optimizer_voltage=37.2,
+                current=5.1,
+                last_measurement=datetime(2026, 6, 1, 12, 0, 0),
+                model="P401",
+            )
+        }
     )
     client.async_get_optimizer_temperatures = AsyncMock(return_value={"OPT-TEST-1": 41.5})
-    client.async_get_inverter_data = AsyncMock(return_value={})
+    client.async_get_inverter_data = AsyncMock(
+        return_value={
+            "INV-TEST-1": InverterData(
+                serial="INV-TEST-1",
+                power=4210.0,
+                status="ACTIVE",
+                manufacturer="SolarEdge",
+                model="SE5000",
+                cpu_version="4.17.0",
+            )
+        }
+    )
     client.async_get_live_power = AsyncMock(
         return_value=LivePower(
             current_power=4210.0,
@@ -51,6 +78,7 @@ def _client(**overrides: object) -> Mock:
         )
     )
     client.async_get_alerts = AsyncMock(return_value={"totalAlertsCount": 0, "topAlerts": []})
+    client.async_get_energy_data = AsyncMock(return_value=[])
     for name, value in overrides.items():
         setattr(client, name, value)
     return client
@@ -145,3 +173,36 @@ async def test_requests_are_spaced(hass: HomeAssistant) -> None:
         coordinator = await _coordinator(hass, _client())
         await coordinator._async_update_data()
     assert sleep.await_count >= 4
+
+
+async def test_persistent_section_failure_logs_warning(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    client = _client(async_get_alerts=AsyncMock(side_effect=aiohttp.ClientError("boom")))
+    coordinator = await _coordinator(hass, client)
+    caplog.set_level(logging.WARNING)
+
+    for _ in range(MAX_CONSECUTIVE_FAILURES):
+        await coordinator._async_update_data()
+        await hass.async_block_till_done()
+
+    assert any("Section alerts failed" in rec.message for rec in caplog.records)
+
+
+async def test_section_recovery_logs_warning(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    client = _client(async_get_alerts=AsyncMock(side_effect=aiohttp.ClientError("boom")))
+    coordinator = await _coordinator(hass, client)
+    for _ in range(MAX_CONSECUTIVE_FAILURES):
+        await coordinator._async_update_data()
+        await hass.async_block_till_done()
+
+    coordinator.client.async_get_alerts = AsyncMock(
+        return_value={"totalAlertsCount": 0, "topAlerts": []}
+    )
+    caplog.set_level(logging.WARNING)
+    await coordinator._async_update_data()
+    await hass.async_block_till_done()
+
+    assert any("Section alerts recovered" in rec.message for rec in caplog.records)

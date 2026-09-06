@@ -24,6 +24,7 @@ MAX_LIVE_INTERVAL_MINUTES: Final = 60
 
 # Statistics are history, not live state; twice a day is plenty.
 STATISTICS_INTERVAL: Final = timedelta(hours=12)
+STATISTICS_FETCH_TIMEOUT: Final = timedelta(seconds=60)
 
 # Deliberate spacing between requests in a cycle. The API publishes no rate
 # limits and offers no support channel, so err towards being a polite client.

@@ -21,7 +21,7 @@ def site_device_info(snapshot: SiteSnapshot) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, snapshot.site_id)},
         manufacturer=MANUFACTURER,
-        name=f"SolarEdge Site {snapshot.site_id}",
+        name="SolarEdge Site",
         model="Monitoring site",
         entry_type=None,
     )

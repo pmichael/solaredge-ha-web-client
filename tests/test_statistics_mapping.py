@@ -7,9 +7,14 @@ import pytest
 from homeassistant.core import HomeAssistant
 from solaredge_web import EnergyData
 
-from custom_components.solaredge_ha_web_client.models import SiteSnapshot, build_site_snapshot
+from custom_components.solaredge_ha_web_client.models import (
+    InverterInfo,
+    SiteSnapshot,
+    build_site_snapshot,
+)
 from custom_components.solaredge_ha_web_client.statistics import (
     bucket_energy,
+    reference_statistic_id,
     resolve_site_timezone,
     statistic_id_for,
 )
@@ -134,3 +139,26 @@ def test_inverters_get_their_own_series() -> None:
     key = statistic_id_for(SITE_ID, "inv", "1")
 
     assert buckets[key][0][1] == 800.0
+
+
+def test_reference_statistic_id_matches_a_bucket_key() -> None:
+    """If these drift, the gate always fires and we never see why."""
+    snapshot = _snapshot()
+    tzinfo = ZoneInfo("Asia/Jerusalem")
+    energy = [EnergyData(start_time=datetime(2026, 9, 4, 8, 0), values={"OPT-TEST-1": 1.0})]
+    reference = reference_statistic_id(snapshot)
+    assert reference is not None
+    assert reference in bucket_energy(energy, snapshot, tzinfo)
+
+
+def test_reference_statistic_id_uses_inverter_when_no_optimizers() -> None:
+    snapshot = SiteSnapshot(
+        site_id=SITE_ID,
+        peak_power_kwp=11.7,
+        timezone="Asia/Jerusalem",
+        has_meter=False,
+        has_storage=False,
+        inverters=(InverterInfo(serial="INV-TEST-1", display_name="Inverter 1"),),
+        optimizers=(),
+    )
+    assert reference_statistic_id(snapshot) == statistic_id_for(SITE_ID, "inv", "1")

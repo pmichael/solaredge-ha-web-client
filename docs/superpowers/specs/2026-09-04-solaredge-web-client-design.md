@@ -254,7 +254,7 @@ optimizer fault.
 
 | Entity | Type | Default |
 |--------|------|---------|
-| Connectivity | `binary_sensor` / `connectivity` | enabled, diagnostic |
+| Running | `binary_sensor` / `running` | enabled, diagnostic |
 | AC Power (Cloud) | `sensor` / `power` | enabled |
 
 ### Site

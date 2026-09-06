@@ -30,10 +30,12 @@ from .const import (
     LOGGER,
     MAX_CONSECUTIVE_FAILURES,
     REQUEST_SPACING_SECONDS,
+    STATISTICS_FETCH_TIMEOUT,
     STATISTICS_INTERVAL,
+    STATISTICS_OVERLAP,
 )
 from .models import LiveData, SiteSnapshot, build_site_snapshot
-from .statistics import async_import_energy, statistic_id_for
+from .statistics import async_import_energy, reference_statistic_id
 
 type SolarEdgeWebConfigEntry = ConfigEntry[SolarEdgeWebCoordinator]
 
@@ -144,6 +146,8 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         self._snapshot: SiteSnapshot | None = None
         self._consecutive_failures = 0
         self._last_statistics_attempt: datetime | None = None
+        self._recorder_skip_logged = False
+        self._section_failures: dict[str, int] = {}
 
     @property
     def consecutive_failures(self) -> int:
@@ -213,8 +217,19 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             )
 
         self._consecutive_failures = 0
-        await self._async_maybe_import_statistics()
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self._async_statistics_background(),
+            f"{DOMAIN}_{self.site_id}_energy_import",
+        )
         return live
+
+    async def _async_statistics_background(self) -> None:
+        """Run the energy import without leaking task exceptions to HA."""
+        try:
+            await self._async_maybe_import_statistics()
+        except ValueError:
+            LOGGER.exception("Energy statistics import hit a caller bug")
 
     async def _async_fetch_live(self) -> LiveData:
         """Fetch each live endpoint in turn, recording what succeeded."""
@@ -235,13 +250,26 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             try:
                 sections[key] = await call()
                 flags[key] = True
+                previous = self._section_failures.get(key, 0)
+                self._section_failures[key] = 0
+                if previous >= MAX_CONSECUTIVE_FAILURES:
+                    LOGGER.warning(
+                        "Section %s recovered after %s consecutive failures", key, previous
+                    )
             except ConfigEntryAuthFailed:
                 raise
             except Exception as err:
                 mapped = map_client_error(err, endpoint)
                 if isinstance(mapped, ConfigEntryAuthFailed):
                     raise mapped from err
-                LOGGER.debug("Section %s failed: %s", key, mapped)
+                count = self._section_failures.get(key, 0) + 1
+                self._section_failures[key] = count
+                if count == MAX_CONSECUTIVE_FAILURES:
+                    LOGGER.warning(
+                        "Section %s failed %s consecutive cycles: %s", key, count, mapped
+                    )
+                else:
+                    LOGGER.debug("Section %s failed: %s", key, mapped)
                 flags[key] = False
             await asyncio.sleep(REQUEST_SPACING_SECONDS)
 
@@ -268,14 +296,26 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         take the live sensors down with it. A credential rejection is the one
         exception — that is not specific to statistics and the user has to act.
         """
+        if "recorder" not in self.hass.config.components:
+            if not self._recorder_skip_logged:
+                LOGGER.debug("Recorder is not loaded; skipping energy import")
+                self._recorder_skip_logged = True
+            return
+
         attempted = False
         try:
-            if not await self._async_statistics_are_due():
+            due, newest = await self._async_statistics_are_due()
+            if not due:
                 return
 
             LOGGER.debug("Importing energy statistics for site %s", self.site_id)
             attempted = True
-            energy_data = await self.client.async_get_energy_data()
+            fetch_kwargs: dict[str, datetime] = {}
+            if newest is not None:
+                fetch_kwargs["start_date"] = newest - STATISTICS_OVERLAP
+                fetch_kwargs["end_date"] = dt_util.utcnow()
+            async with asyncio.timeout(STATISTICS_FETCH_TIMEOUT.total_seconds()):
+                energy_data = await self.client.async_get_energy_data(**fetch_kwargs)
             self._last_statistics_attempt = dt_util.utcnow()
             await async_import_energy(
                 self.hass,
@@ -284,45 +324,46 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
                 energy_data,
             )
         except ConfigEntryAuthFailed:
-            raise
+            self.config_entry.async_start_reauth(self.hass)
+            return
         except ValueError:
             # Library ValueError is a caller bug, not a soft statistics failure.
             raise
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001
             mapped = map_client_error(err, "energy data")
             if isinstance(mapped, ConfigEntryAuthFailed):
-                raise mapped from err
+                self.config_entry.async_start_reauth(self.hass)
+                return
             if attempted:
                 self._last_statistics_attempt = dt_util.utcnow()
             LOGGER.warning("Energy statistics import failed: %s", mapped)
 
-    async def _async_statistics_are_due(self) -> bool:
+    async def _async_statistics_are_due(self) -> tuple[bool, datetime | None]:
         """Whether enough time has passed since the newest stored statistic.
 
         Elapsed time from the recorder rather than a cycle counter: the
         recorder already knows when we last wrote, so no state needs
         persisting, and the gate stays correct across restarts and at any poll
         interval.
+
+        Returns ``(due, newest)``. ``newest`` is the recorder hour when due
+        because history already exists, so the fetch can apply overlap.
         """
-        reference = (
-            statistic_id_for(self.site_id, "opt", self.snapshot.optimizers[0].display_name)
-            if self.snapshot.optimizers
-            else None
-        )
+        reference = reference_statistic_id(self.snapshot)
         if reference is None:
-            return False
+            return False, None
 
         now = dt_util.utcnow()
         if (
             self._last_statistics_attempt is not None
             and now - self._last_statistics_attempt < STATISTICS_INTERVAL
         ):
-            return False
+            return False, None
 
         newest = await _async_newest_statistic_time(self.hass, reference)
         if newest is None:
-            return True
-        return now - newest >= STATISTICS_INTERVAL
+            return True, None
+        return now - newest >= STATISTICS_INTERVAL, newest
 
 
 async def _async_newest_statistic_time(hass: HomeAssistant, statistic_id: str) -> datetime | None:
