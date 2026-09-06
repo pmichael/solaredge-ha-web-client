@@ -268,11 +268,13 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         take the live sensors down with it. A credential rejection is the one
         exception — that is not specific to statistics and the user has to act.
         """
+        attempted = False
         try:
             if not await self._async_statistics_are_due():
                 return
 
             LOGGER.debug("Importing energy statistics for site %s", self.site_id)
+            attempted = True
             energy_data = await self.client.async_get_energy_data()
             self._last_statistics_attempt = dt_util.utcnow()
             await async_import_energy(
@@ -290,6 +292,8 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
             mapped = map_client_error(err, "energy data")
             if isinstance(mapped, ConfigEntryAuthFailed):
                 raise mapped from err
+            if attempted:
+                self._last_statistics_attempt = dt_util.utcnow()
             LOGGER.warning("Energy statistics import failed: %s", mapped)
 
     async def _async_statistics_are_due(self) -> bool:
