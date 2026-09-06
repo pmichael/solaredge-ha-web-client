@@ -130,6 +130,45 @@ async def test_statistics_failure_does_not_trigger_reauth_alone(
         await coordinator._async_update_data()
 
 
+async def test_statistics_403_triggers_reauth(recorder_mock: Recorder, hass: HomeAssistant) -> None:
+    """A 403 on the energy endpoint is a credential problem, same as 401."""
+    client = _client(
+        async_get_energy_data=AsyncMock(
+            side_effect=aiohttp.ClientResponseError(
+                request_info=Mock(), history=(), status=403, message="denied"
+            )
+        )
+    )
+    coordinator = await _coordinator(hass, client)
+
+    with (
+        patch(
+            "custom_components.solaredge_ha_web_client.coordinator._async_newest_statistic_time",
+            new=AsyncMock(return_value=None),
+        ),
+        pytest.raises(ConfigEntryAuthFailed),
+    ):
+        await coordinator._async_update_data()
+
+
+async def test_empty_energy_payload_does_not_refetch_every_cycle(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """An empty history response must not turn the 12-hour gate into every poll."""
+    energy = AsyncMock(return_value=[])
+    client = _client(async_get_energy_data=energy)
+    coordinator = await _coordinator(hass, client)
+
+    with patch(
+        "custom_components.solaredge_ha_web_client.coordinator._async_newest_statistic_time",
+        new=AsyncMock(return_value=None),
+    ):
+        await coordinator._async_update_data()
+        await coordinator._async_update_data()
+
+    assert energy.await_count == 1
+
+
 async def test_statistics_value_error_is_not_a_soft_failure(
     recorder_mock: Recorder, hass: HomeAssistant
 ) -> None:

@@ -4,9 +4,11 @@ from unittest.mock import AsyncMock
 
 import aiohttp
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNKNOWN
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from solaredge_web import InverterData
+
+from custom_components.solaredge_ha_web_client.const import MAX_CONSECUTIVE_FAILURES
 
 from .test_coordinator_live import _client
 from .test_init import _setup
@@ -64,4 +66,40 @@ async def test_inverter_connectivity_off_when_not_active(
         )
     )
     await _setup(hass, client)
-    assert hass.states.get("binary_sensor.inverter_1_connectivity").state == STATE_OFF
+    state = hass.states.get("binary_sensor.inverter_1_connectivity")
+    assert state is not None
+    assert state.state == STATE_OFF
+
+
+async def test_failed_inverter_fetch_is_unknown_not_off(hass: HomeAssistant) -> None:
+    """A failed inverter poll must not look like a disconnected inverter."""
+    client = _client(async_get_inverter_data=AsyncMock(side_effect=aiohttp.ClientError("boom")))
+    await _setup(hass, client)
+    state = hass.states.get("binary_sensor.inverter_1_connectivity")
+    assert state is not None
+    assert state.state == STATE_UNKNOWN
+
+
+async def test_sustained_failure_marks_binary_sensors_unavailable(
+    hass: HomeAssistant,
+) -> None:
+    """Stale-notify must reach both platforms, not only sensors."""
+    entry = await _setup(hass, _client())
+    coordinator = entry.runtime_data
+    error = AsyncMock(side_effect=aiohttp.ClientError("boom"))
+    coordinator.client.async_get_optimizer_data = error
+    coordinator.client.async_get_optimizer_temperatures = error
+    coordinator.client.async_get_inverter_data = error
+    coordinator.client.async_get_live_power = error
+    coordinator.client.async_get_alerts = error
+
+    for _ in range(MAX_CONSECUTIVE_FAILURES):
+        await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    alerts = hass.states.get("binary_sensor.solaredge_site_site_test_alerts")
+    connectivity = hass.states.get("binary_sensor.inverter_1_connectivity")
+    assert alerts is not None
+    assert connectivity is not None
+    assert alerts.state == STATE_UNAVAILABLE
+    assert connectivity.state == STATE_UNAVAILABLE

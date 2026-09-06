@@ -1,16 +1,18 @@
 """Sensor entities."""
 
-from unittest.mock import AsyncMock
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import aiohttp
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from solaredge_web import OptimizerData
 
 from custom_components.solaredge_ha_web_client.const import MAX_CONSECUTIVE_FAILURES
 
-from .test_coordinator_live import _client
+from .test_coordinator_live import _client, _entry
 from .test_init import _setup
 
 
@@ -112,6 +114,71 @@ async def test_sustained_failure_marks_entities_unavailable(
     await hass.async_block_till_done()
 
     assert hass.states.get("sensor.optimizer_1_1_1_power").state == STATE_UNAVAILABLE
+
+
+async def test_nameplate_stays_available_after_sustained_failure(
+    hass: HomeAssistant,
+) -> None:
+    """Peak power is a layout fact; a live outage must not blank it."""
+    entry = await _setup(hass, _client())
+    coordinator = entry.runtime_data
+    error = AsyncMock(side_effect=aiohttp.ClientError("boom"))
+    coordinator.client.async_get_optimizer_data = error
+    coordinator.client.async_get_optimizer_temperatures = error
+    coordinator.client.async_get_inverter_data = error
+    coordinator.client.async_get_live_power = error
+    coordinator.client.async_get_alerts = error
+
+    for _ in range(MAX_CONSECUTIVE_FAILURES):
+        await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    peak = hass.states.get("sensor.solaredge_site_site_test_peak_power")
+    last_ok = hass.states.get("sensor.solaredge_site_site_test_last_successful_update")
+    assert peak is not None
+    assert last_ok is not None
+    assert peak.state == "11.7"
+    assert last_ok.state != STATE_UNAVAILABLE
+    assert last_ok.state != STATE_UNKNOWN
+
+
+async def test_naive_last_measurement_uses_site_timezone(
+    hass: HomeAssistant,
+) -> None:
+    """Library timestamps are naive site-local; HA timestamp sensors need a tz."""
+    client = _client(
+        async_get_optimizer_data=AsyncMock(
+            return_value={
+                "OPT-TEST-1": OptimizerData(
+                    serial="OPT-TEST-1",
+                    power=198.0,
+                    last_measurement=datetime(2026, 6, 1, 12, 0, 0),
+                )
+            }
+        )
+    )
+    entry = _entry()
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.solaredge_ha_web_client.coordinator.SolarEdgeWeb",
+        return_value=client,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        registry = er.async_get(hass)
+        rows = [
+            e
+            for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+            if e.unique_id.endswith("_last_measurement")
+        ]
+        assert rows
+        registry.async_update_entity(rows[0].entity_id, disabled_by=None)
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(rows[0].entity_id)
+    assert state is not None
+    assert state.state == "2026-06-01T09:00:00+00:00"
 
 
 async def test_unique_ids_are_stable_and_distinct(hass: HomeAssistant) -> None:
