@@ -143,6 +143,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         )
         self._snapshot: SiteSnapshot | None = None
         self._consecutive_failures = 0
+        self._last_statistics_attempt: datetime | None = None
 
     @property
     def consecutive_failures(self) -> int:
@@ -273,6 +274,7 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
 
             LOGGER.debug("Importing energy statistics for site %s", self.site_id)
             energy_data = await self.client.async_get_energy_data()
+            self._last_statistics_attempt = dt_util.utcnow()
             await async_import_energy(
                 self.hass,
                 self.snapshot,
@@ -306,10 +308,17 @@ class SolarEdgeWebCoordinator(DataUpdateCoordinator[LiveData]):
         if reference is None:
             return False
 
+        now = dt_util.utcnow()
+        if (
+            self._last_statistics_attempt is not None
+            and now - self._last_statistics_attempt < STATISTICS_INTERVAL
+        ):
+            return False
+
         newest = await _async_newest_statistic_time(self.hass, reference)
         if newest is None:
             return True
-        return dt_util.utcnow() - newest >= STATISTICS_INTERVAL
+        return now - newest >= STATISTICS_INTERVAL
 
 
 async def _async_newest_statistic_time(hass: HomeAssistant, statistic_id: str) -> datetime | None:

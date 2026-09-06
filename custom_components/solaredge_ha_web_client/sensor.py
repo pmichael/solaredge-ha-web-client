@@ -24,6 +24,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
 from .coordinator import SolarEdgeWebCoordinator
 from .entity import (
@@ -262,7 +263,15 @@ class SolarEdgeOptimizerSensor(SolarEdgeWebEntity, SensorEntity):
         live = self.coordinator.data
         if live is None or not self.entity_description.section_ok_fn(live):
             return None
-        return self.entity_description.value_fn(live, self._optimizer.serial)
+        value = self.entity_description.value_fn(live, self._optimizer.serial)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            timezone = self.coordinator.snapshot.timezone
+            zone = dt_util.get_time_zone(timezone)
+            if zone is None:
+                msg = f"SolarEdge reported an unknown site timezone: {timezone}"
+                raise ValueError(msg)
+            return value.replace(tzinfo=zone)
+        return value
 
 
 class SolarEdgeInverterSensor(SolarEdgeWebEntity, SensorEntity):
